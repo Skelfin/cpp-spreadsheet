@@ -30,34 +30,6 @@ enum PrecedenceRule {
     PR_BOTH = PR_LEFT | PR_RIGHT,  // needed for both children
 };
 
-// PRECEDENCE_RULES[parent][child] determines if parentheses need
-// to be inserted between a parent and a child of specific precedences;
-// for some nodes rules are different for left and right children:
-// (X c Y) p Z  vs  X p (Y c Z)
-//
-// The interesting cases are the ones where removing the parens would change the AST.
-// It may happen when our precedence rules for parentheses are different from
-// the grammatic precedence of operations.
-//
-// Case analysis:
-// A + (B + C) - always okay (nothing of lower grammatic precedence could have been written to the
-// right)
-//    (e.g. if we had A + (B + C) / D, it wouldn't parse in a way
-//    that woudld have given us A + (B + C) as a subexpression to deal with)
-// A + (B - C) - always okay (nothing of lower grammatic precedence could have been written to the
-// right) A - (B + C) - never okay A - (B - C) - never okay A * (B * C) - always okay (the parent
-// has the highest grammatic precedence) A * (B / C) - always okay (the parent has the highest
-// grammatic precedence) A / (B * C) - never okay A / (B / C) - never okay
-// -(A + B) - never okay
-// -(A - B) - never okay
-// -(A * B) - always okay (the resulting binary op has the highest grammatic precedence)
-// -(A / B) - always okay (the resulting binary op has the highest grammatic precedence)
-// +(A + B) - **sometimes okay** (e.g. parens in +(A + B) / C are **not** optional)
-//     (currently in the table we're always putting in the parentheses)
-// +(A - B) - **sometimes okay** (same)
-//     (currently in the table we're always putting in the parentheses)
-// +(A * B) - always okay (the resulting binary op has the highest grammatic precedence)
-// +(A / B) - always okay (the resulting binary op has the highest grammatic precedence)
 constexpr PrecedenceRule PRECEDENCE_RULES[EP_END][EP_END] = {
     /* EP_ADD */ {PR_NONE, PR_NONE, PR_NONE, PR_NONE, PR_NONE, PR_NONE},
     /* EP_SUB */ {PR_RIGHT, PR_RIGHT, PR_NONE, PR_NONE, PR_NONE, PR_NONE},
@@ -72,9 +44,8 @@ public:
     virtual ~Expr() = default;
     virtual void Print(std::ostream& out) const = 0;
     virtual void DoPrintFormula(std::ostream& out, ExprPrecedence precedence) const = 0;
-    virtual double Evaluate(/*добавьте сюда нужные аргументы*/ args) const = 0;
+    virtual double Evaluate(const CheckValueCell& func_check_value_cell) const = 0;
 
-    // higher is tighter
     virtual ExprPrecedence GetPrecedence() const = 0;
 
     void PrintFormula(std::ostream& out, ExprPrecedence parent_precedence,
@@ -136,14 +107,36 @@ public:
             case Divide:
                 return EP_DIV;
             default:
-                // have to do this because VC++ has a buggy warning
                 assert(false);
                 return static_cast<ExprPrecedence>(INT_MAX);
         }
     }
 
-    double Evaluate(/*добавьте нужные аргументы*/) const override {
-			// Скопируйте ваше решение из предыдущих уроков.
+    double Evaluate(const CheckValueCell& func_check_value_cell) const override {
+        double result = 0;
+
+        switch (type_){
+        case Type::Add:
+            result = lhs_->Evaluate(func_check_value_cell) + rhs_->Evaluate(func_check_value_cell);
+            break;
+        case Type::Subtract:
+            result = lhs_->Evaluate(func_check_value_cell) - rhs_->Evaluate(func_check_value_cell);
+            break;
+        case Type::Multiply:
+            result = lhs_->Evaluate(func_check_value_cell) * rhs_->Evaluate(func_check_value_cell);
+            break;
+        case Type::Divide:
+            result = lhs_->Evaluate(func_check_value_cell) / rhs_->Evaluate(func_check_value_cell);
+            break;
+        default: 
+            throw FormulaException("");
+        }
+
+        if(!std::isfinite(result)){
+            throw FormulaError(FormulaError::Category::Div0);
+        }
+
+        return result;
     }
 
 private:
@@ -180,8 +173,8 @@ public:
         return EP_UNARY;
     }
 
-    double Evaluate(/*добавьте нужные аргументы*/ args) const override {
-        // Скопируйте ваше решение из предыдущих уроков.
+    double Evaluate(const CheckValueCell& func_check_value_cell) const override {
+        return (type_ == Type::UnaryMinus) ? (-1) * operand_->Evaluate(func_check_value_cell) : operand_->Evaluate(func_check_value_cell);
     }
 
 private:
@@ -211,8 +204,8 @@ public:
         return EP_ATOM;
     }
 
-    double Evaluate(/*добавьте нужные аргументы*/ args) const override {
-        // реализуйте метод.
+    double Evaluate(const CheckValueCell& func_check_value_cell) const override {
+        return func_check_value_cell(*cell_);
     }
 
 private:
@@ -237,7 +230,7 @@ public:
         return EP_ATOM;
     }
 
-    double Evaluate(/*добавьте нужные аргументы*/ args) const override {
+    double Evaluate(const CheckValueCell& /*func_check_value_cell*/) const override {
         return value_;
     }
 
@@ -391,14 +384,14 @@ void FormulaAST::PrintFormula(std::ostream& out) const {
     root_expr_->PrintFormula(out, ASTImpl::EP_ATOM);
 }
 
-double FormulaAST::Execute(/*добавьте нужные аргументы*/ args) const {
-    return root_expr_->Evaluate(/*добавьте нужные аргументы*/ args);
+double FormulaAST::Execute(const CheckValueCell& func_check_value_cell) const {
+    return root_expr_->Evaluate(func_check_value_cell);
 }
 
 FormulaAST::FormulaAST(std::unique_ptr<ASTImpl::Expr> root_expr, std::forward_list<Position> cells)
     : root_expr_(std::move(root_expr))
     , cells_(std::move(cells)) {
-    cells_.sort();  // to avoid sorting in GetReferencedCells
+    cells_.sort();
 }
 
 FormulaAST::~FormulaAST() = default;

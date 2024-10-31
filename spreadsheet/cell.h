@@ -22,6 +22,7 @@ public:
 
     bool IsReferenced() const;
 
+
 private:
     class Impl;
     class EmptyImpl;
@@ -29,8 +30,12 @@ private:
     class FormulaImpl;
 
     std::unique_ptr<Impl> impl_;
+    Sheet& sheet_;
 
-    // Добавьте поля и методы для связи с таблицей, проверки циклических 
-    // зависимостей, графа зависимостей и т. д.
-
+    std::unordered_set<Cell*> depends_on_cells_;
+    std::unordered_set<Cell*> cells_depend_on_this_;
+    
+    bool CheckCircularDependency(const Impl& newImpl) const;
+    void UpdateDependencies();
+    void InvalidateCache(bool forced_update = false);
 };

@@ -9,6 +9,9 @@
 #include <vector>
 #include <map>
 
+inline constexpr char FORMULA_SIGN = '=';
+inline constexpr char ESCAPE_SIGN = '\'';
+
 struct Position {
     int row = 0;
     int col = 0;
@@ -100,9 +103,6 @@ public:
     virtual std::string GetText() const = 0;
     virtual std::vector<Position> GetReferencedCells() const = 0;
 };
-
-inline constexpr char FORMULA_SIGN = '=';
-inline constexpr char ESCAPE_SIGN = '\'';
 
 // Интерфейс таблицы
 class SheetInterface {

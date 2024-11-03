@@ -37,6 +37,10 @@ private:
     void UpdateCoordinateCounter(Position pos, ActionWithCoordinates action);
     void PreparingSheetForInsert(Position pos);
 
+    bool IsPositionValid(Position pos) const;
+    bool HasCell(Position pos) const;
+    bool HasCoordinateCounter(int row, int col) const;
+
     template<typename FunctionOutStream>
     void PrintCells(std::ostream& output, FunctionOutStream print_cell) const;
 

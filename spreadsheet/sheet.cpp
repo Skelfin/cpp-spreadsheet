@@ -44,19 +44,19 @@ CellInterface* Sheet::GetCell(Position pos) {
     return GetCellPtr(pos);    
 }
 
-const Cell* Sheet::GetCellPtr(Position pos) const{
+const Cell* Sheet::GetCellPtr(Position pos) const {
     if (!pos.IsValid()) {
         throw InvalidPositionException("Invalid position in ClearCell()");
     }
 
-    if (size_t(pos.row) >= cells_.size() || size_t(pos.col) >= cells_[pos.row].size()) {
+    if (!IsPositionValid(pos)) {
         return nullptr;
     }
 
-    return cells_[pos.row][pos.col].get();        
+    return cells_[pos.row][pos.col].get();
 }
 
-Cell* Sheet::GetCellPtr(Position pos){
+Cell* Sheet::GetCellPtr(Position pos) {
     return const_cast<Cell*>(static_cast<const Sheet&>(*this).GetCellPtr(pos));        
 }
 
@@ -65,16 +65,13 @@ void Sheet::ClearCell(Position pos) {
         throw InvalidPositionException("Invalid position in ClearCell()");
     }
 
-    if ((size_t(pos.row) < cells_.size()) && (size_t(pos.col) < cells_[pos.row].size())) {
-        if (auto &cell = cells_[pos.row][pos.col]; cell) {
-            cell.reset();
-            UpdateCoordinateCounter(pos, ActionWithCoordinates::kRemoveFromIndex);
-        }
+    if (HasCell(pos)) {
+        cells_[pos.row][pos.col].reset();
+        UpdateCoordinateCounter(pos, ActionWithCoordinates::kRemoveFromIndex);
     }
 }
 
 Size Sheet::GetPrintableSize() const {
-
     if(row_number_to_counter_.empty() || col_number_to_counter_.empty()){
         return {0,0};
     }
@@ -87,7 +84,6 @@ void Sheet::PrintValues(std::ostream& output) const {
         if(cell){
             std::visit([&output](const auto& value) { output << value; }, cell->GetValue());
         }
-        
     });    
 }
 
@@ -96,25 +92,20 @@ void Sheet::PrintTexts(std::ostream& output) const {
         if(cell){
             output << cell->GetText(); 
         } 
-        
     });
 }
 
 template<typename FunctionOutStream>
-void Sheet::PrintCells(std::ostream& output, FunctionOutStream print_cell) const{
-
+void Sheet::PrintCells(std::ostream& output, FunctionOutStream print_cell) const {
     auto size = GetPrintableSize();
     for (int row = 0; row < size.rows; ++row) {
         for (int col = 0; col < size.cols; ++col) {
-            
             if(col > 0){
                 output << '\t';
             }
 
             print_cell(GetCell({row, col}));
-            
         }
-
         output << '\n';
     }   
 }
@@ -123,8 +114,7 @@ std::unique_ptr<SheetInterface> CreateSheet() {
     return std::make_unique<Sheet>();
 }
 
-void Sheet::UpdateCoordinateCounter(Position pos, ActionWithCoordinates action){
-
+void Sheet::UpdateCoordinateCounter(Position pos, ActionWithCoordinates action) {
     if(action == ActionWithCoordinates::kAddToIndex){
         ++row_number_to_counter_[pos.row];
         ++col_number_to_counter_[pos.col];
@@ -132,17 +122,30 @@ void Sheet::UpdateCoordinateCounter(Position pos, ActionWithCoordinates action){
     }
 
     if(action == ActionWithCoordinates::kRemoveFromIndex){
-        auto row_number_iter = row_number_to_counter_.find(pos.row);
-        auto col_number_iter = col_number_to_counter_.find(pos.col);
+        if (HasCoordinateCounter(pos.row, pos.col)) {
+            auto row_number_iter = row_number_to_counter_.find(pos.row);
+            auto col_number_iter = col_number_to_counter_.find(pos.col);
 
-        if(row_number_iter != row_number_to_counter_.end() && col_number_iter != col_number_to_counter_.end()){
-            if(--row_number_iter->second <= 0){
+            if (--row_number_iter->second <= 0) {
                 row_number_to_counter_.erase(row_number_iter);
             }
 
-            if(--col_number_iter->second <= 0){
+            if (--col_number_iter->second <= 0) {
                 col_number_to_counter_.erase(col_number_iter);
             }
         }
     }
+}
+
+bool Sheet::IsPositionValid(Position pos) const {
+    return pos.IsValid() && size_t(pos.row) < cells_.size() && size_t(pos.col) < cells_[pos.row].size();
+}
+
+bool Sheet::HasCell(Position pos) const {
+    return IsPositionValid(pos) && cells_[pos.row][pos.col] != nullptr;
+}
+
+bool Sheet::HasCoordinateCounter(int row, int col) const {
+    return row_number_to_counter_.find(row) != row_number_to_counter_.end() &&
+           col_number_to_counter_.find(col) != col_number_to_counter_.end();
 }

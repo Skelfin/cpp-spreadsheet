@@ -9,13 +9,15 @@
 
 using namespace std::literals;
 
+constexpr double EMPTY_CELL_VALUE = 0.0;
+
 std::ostream& operator<<(std::ostream& output, FormulaError fe) {
     return output << fe.ToString();
 }
 
 struct GetDoubleValue{
     double operator()(const std::string& value){
-        double ans = 0;
+        double ans = 0.0;
 
         if (!value.empty()) {
             char* end;
@@ -54,7 +56,7 @@ public:
 
                 const auto* cell = sheet.GetCell(position);
 
-                return (cell) ? std::visit(GetDoubleValue(), cell->GetValue()) : 0.0;
+                return (cell) ? std::visit(GetDoubleValue(), cell->GetValue()) : EMPTY_CELL_VALUE;
             };
         
             return ast_.Execute(func_check_value_cell);
